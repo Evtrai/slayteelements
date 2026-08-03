@@ -1,0 +1,528 @@
+<!--
+  AMSN 2026 Convention — Live Schedule (Slayte Elements)
+  ---------------------------------------------------------------
+  Paste this whole block into a raw HTML / custom-code area of the
+  page (WordPress "Custom HTML" block, Novi custom HTML field, etc)
+  using the editor's source-code / HTML view so the <style> and
+  <script> blocks are kept intact.
+
+  Styling is pulled from amsn.org (fonts, brand colors, button
+  treatment) since the host page has no existing schedule markup
+  to annotate. Data (sessions, tracks, session types, levels,
+  speakers + photos) is pulled live from the real AMSN 2026
+  Convention event in production.
+
+  Scoped under .amsn-slt so it can't leak into / be leaked into
+  by the host page's own styles.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Open+Sans:ital,wght@0,400;0,600;0,700;1,400&family=Montserrat:ital,wght@0,600;0,700&display=swap" rel="stylesheet">
+
+<style>
+  /* Defined on :root (not just .amsn-slt) because Slayte Elements mounts its
+     session/speaker detail modals into a separate root appended to <body>,
+     outside this widget's own DOM subtree — a var() scoped only to .amsn-slt
+     would resolve to nothing in there. */
+  :root {
+    --amsn-teal: #022F39;
+    --amsn-green: #30B07F;
+    --amsn-sage: #5F9083;
+    --amsn-darkgreen: #005953;
+    --amsn-orange: #E45A3A;
+    --amsn-purple: #9A4D9D;
+    --amsn-blue: #478AC9;
+  }
+  .amsn-slt {
+    font-family: "Open Sans", sans-serif;
+    color: #000;
+    max-width: 1140px;
+    margin: 0 auto;
+    padding: 0 20px;
+    box-sizing: border-box;
+  }
+  .amsn-slt *, .amsn-slt *::before, .amsn-slt *::after { box-sizing: border-box; }
+
+  .amsn-slt__header {
+    background: var(--amsn-darkgreen);
+    color: #fff;
+    text-align: center;
+    padding: 40px 20px;
+    margin-bottom: 30px;
+  }
+  .amsn-slt__header h2 {
+    font-family: "Open Sans", sans-serif;
+    font-size: 36px;
+    font-weight: 700;
+    color: #fff;
+    margin: 0 0 8px;
+  }
+  .amsn-slt__header p { margin: 0; font-size: 16px; opacity: .9; }
+
+  /* Filters */
+  .amsn-slt__filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: center;
+    margin-bottom: 24px;
+    padding: 16px;
+    background: #f5f5f5;
+    border-left: 4px solid var(--amsn-green);
+  }
+  .amsn-slt__filters select,
+  .amsn-slt__filters input[type="text"] {
+    font-family: "Open Sans", sans-serif;
+    font-size: 15px;
+    padding: 9px 12px;
+    border: 1px solid var(--amsn-teal);
+    background: #fff;
+    color: var(--amsn-teal);
+    min-width: 160px;
+  }
+  .amsn-slt__filters input[type="text"] { flex: 1 1 200px; }
+  .amsn-slt__clear {
+    display: inline-block;
+    padding: 10px 15px;
+    color: #fff;
+    text-align: center;
+    font-size: 14px;
+    font-weight: 700;
+    font-family: "Open Sans", sans-serif;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    background-color: var(--amsn-teal);
+    border: 1px solid var(--amsn-teal);
+    border-radius: 0;
+    cursor: pointer;
+  }
+  .amsn-slt__clear:hover { background-color: var(--amsn-sage); border-color: var(--amsn-sage); }
+
+  [data-slt-loading], [data-slt-error], [data-slt-empty] {
+    padding: 40px 20px;
+    text-align: center;
+    font-size: 16px;
+    color: var(--amsn-teal);
+  }
+  [data-slt-error] { color: var(--amsn-orange); display: none; }
+  [data-slt-empty] { display: none; }
+  [data-slt-loading] { display: none; }
+  .amsn-slt .slt-no-results { display: none; padding: 40px 20px; text-align: center; color: #a2a2a2; }
+
+  /* Day accordion */
+  .amsn-slt__day {
+    border: 1px solid #dfdfdf;
+    margin-bottom: 12px;
+  }
+  .amsn-slt__day-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--amsn-teal);
+    color: #fff;
+    padding: 16px 20px;
+    cursor: pointer;
+    user-select: none;
+  }
+  .amsn-slt__day-toggle h3 {
+    margin: 0;
+    font-size: 20px;
+    font-weight: 700;
+    color: #fff;
+  }
+  .amsn-slt__day-toggle .amsn-slt__icon {
+    font-size: 22px;
+    line-height: 1;
+    font-weight: 700;
+  }
+  .amsn-slt__day.is-open .amsn-slt__day-toggle { background: var(--amsn-sage); }
+  .amsn-slt__day-body { display: none; padding: 0; }
+  .amsn-slt__day.is-open .amsn-slt__day-body { display: block; }
+
+  /* Session rows */
+  .amsn-slt__session {
+    display: flex;
+    gap: 20px;
+    padding: 18px 20px;
+    border-top: 1px solid #efefef;
+    cursor: pointer;
+  }
+  .amsn-slt__session:hover { background: #f9faf9; }
+  .amsn-slt__session-time {
+    flex: 0 0 140px;
+    font-weight: 700;
+    color: var(--amsn-teal);
+    font-size: 15px;
+  }
+  .amsn-slt__session-main { flex: 1 1 auto; min-width: 0; }
+  .amsn-slt__session-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--amsn-teal);
+    margin: 0 0 8px;
+  }
+  .amsn-slt__badges { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+  .amsn-slt__badge {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    padding: 4px 10px;
+    border-radius: 12px;
+    color: #fff;
+    white-space: nowrap;
+  }
+  .amsn-slt__badge--spaced { margin-right: 6px; }
+  .amsn-slt__sold-out {
+    background: var(--amsn-orange);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    padding: 4px 10px;
+    border-radius: 12px;
+    margin-left: 8px;
+  }
+  .amsn-slt__speakers { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 8px; }
+  .amsn-slt__speaker { display: flex; align-items: center; gap: 8px; }
+  .amsn-slt__speaker-photo {
+    width: 32px; height: 32px; border-radius: 50%;
+    object-fit: cover; background: #dfdfdf; flex: 0 0 auto;
+  }
+  .amsn-slt__speaker-name { font-size: 13px; color: #414042; }
+
+  /* Modal (session + speaker detail) */
+  [data-slt-modal] .modal-content {
+    font-family: "Open Sans", sans-serif;
+    max-width: 640px;
+    padding: 8px 4px;
+  }
+  [data-slt-modal] h2 { color: var(--amsn-teal); font-size: 26px; margin: 0 0 16px; }
+  [data-slt-modal] .info-row { margin-bottom: 14px; }
+  [data-slt-modal] .info-label { font-weight: 700; color: var(--amsn-darkgreen); margin-right: 6px; }
+  [data-slt-modal] .description { line-height: 1.6; margin-top: 10px; }
+  .amsn-slt__modal-speakers { display: flex; flex-direction: column; gap: 10px; }
+  .amsn-slt__modal-speaker { display: flex; align-items: center; gap: 10px; cursor: pointer; }
+  .amsn-slt__modal-speaker-photo {
+    width: 44px; height: 44px; border-radius: 50%; object-fit: cover; background: #dfdfdf;
+  }
+  .amsn-slt__modal-speaker .amsn-slt__speaker-role { font-size: 12px; color: #a2a2a2; margin-left: 6px; }
+
+  .slt-speaker-header { display: flex; gap: 16px; align-items: center; margin-bottom: 16px; }
+  .slt-speaker-photo { width: 84px; height: 84px; border-radius: 50%; object-fit: cover; background: #dfdfdf; }
+  .slt-speaker-name { color: var(--amsn-teal); font-size: 22px; margin: 0; }
+  .slt-speaker-title, .slt-speaker-company { color: #414042; font-size: 14px; }
+  .slt-speaker-bio { line-height: 1.6; margin-bottom: 16px; }
+  .speaker-sessions-title { color: var(--amsn-darkgreen); font-size: 16px; }
+  .speaker-session-item { padding: 8px 0; border-top: 1px solid #efefef; cursor: pointer; }
+  .speaker-session-title { color: var(--amsn-teal); font-weight: 700; }
+
+  @media (max-width: 640px) {
+    .amsn-slt__session { flex-direction: column; gap: 8px; }
+    .amsn-slt__session-time { flex: none; }
+  }
+</style>
+
+<div class="amsn-slt">
+
+  <div class="amsn-slt__header">
+    <h2>AMSN 2026 Convention Schedule</h2>
+    <p>Sept. 23&ndash;26 &middot; Palm Springs, California</p>
+  </div>
+
+  <div data-slt-element="session-list"
+       data-slt-params='{"eventUuid": "03365dd6-98ce-4124-999d-2b9e2ec05385", "showYear": false, "showSoldOut": true}'>
+
+    <div class="amsn-slt__filters">
+      <input type="text" data-slt-filter="search" placeholder="Search sessions&hellip;">
+      <select data-slt-filter="date">
+        <option value="">All Days</option>
+      </select>
+      <select data-slt-filter="category:track">
+        <option value="">All Tracks</option>
+      </select>
+      <select data-slt-filter="category:session_type">
+        <option value="">All Session Types</option>
+      </select>
+      <button type="button" class="amsn-slt__clear" data-slt-action="clear-filters">Clear Filters</button>
+    </div>
+
+    <div data-slt-loading>Loading the schedule&hellip;</div>
+    <div data-slt-error><span data-slt-error-message></span></div>
+    <div data-slt-empty>No sessions match your filters.</div>
+    <div class="slt-no-results">No sessions match your filters.</div>
+
+    <!-- Hidden flat render source: the widget clones one row per session here.
+         The script below groups the clones into the day accordion below it. -->
+    <div id="amsn-slt-render-source" style="display:none;">
+      <div data-slt-for-each="session-list-item" data-slt-click="selectSession" class="amsn-slt__session">
+        <span class="amsn-slt__row-date" data-slt-value="date" style="display:none;"></span>
+        <div class="amsn-slt__session-time" data-slt-value="time"></div>
+        <div class="amsn-slt__session-main">
+          <div class="amsn-slt__session-title">
+            <span data-slt-value="title"></span>
+            <span class="amsn-slt__sold-out" data-slt-if="isSoldOut">Sold Out</span>
+          </div>
+          <div class="amsn-slt__badges" data-slt-for-each="categories">
+            <span class="amsn-slt__badge amsn-slt-color" data-slt-for-each="values" data-slt-value="."></span>
+          </div>
+          <div class="amsn-slt__speakers" data-slt-for-each="speakers">
+            <div class="amsn-slt__speaker">
+              <img class="amsn-slt__speaker-photo" data-slt-value="speaker.photo" alt=""
+                   onerror="this.style.visibility='hidden'">
+              <span class="amsn-slt__speaker-name" data-slt-value="speaker.name"></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Day accordion — built by script below from the render source -->
+    <div id="amsn-slt-accordion"></div>
+
+  </div>
+
+  <!-- Session detail modal -->
+  <div data-slt-modal="session-detail">
+    <div class="modal-content">
+      <h2 data-slt-value="title"></h2>
+
+      <div class="info-row">
+        <span class="info-label">When:</span>
+        <span data-slt-value="date"></span> &middot; <span data-slt-value="time"></span>
+      </div>
+
+      <div class="info-row" data-slt-for-each="categories">
+        <span class="info-label" data-slt-value="name"></span>
+        <span data-slt-for-each="values" data-slt-value="." class="amsn-slt__badge amsn-slt-color amsn-slt__badge--spaced"></span>
+      </div>
+
+      <div class="info-row">
+        <span class="info-label">Speakers:</span>
+        <div class="amsn-slt__modal-speakers">
+          <div class="amsn-slt__modal-speaker" data-slt-for-each="speakers" data-slt-click="viewSpeaker">
+            <img class="amsn-slt__modal-speaker-photo" data-slt-value="speaker.photo" alt=""
+                 onerror="this.style.visibility='hidden'">
+            <span data-slt-value="speaker.name"></span>
+            <span class="amsn-slt__speaker-role" data-slt-value="groupLabel"></span>
+          </div>
+        </div>
+      </div>
+
+      <div class="description" data-slt-value="description" data-slt-html></div>
+    </div>
+  </div>
+
+  <!-- Speaker detail modal -->
+  <div data-slt-modal="speaker-detail">
+    <div class="modal-content">
+      <div data-slt-element="speaker-detail" data-slt-params="{}">
+        <div class="slt-speaker-header">
+          <img class="slt-speaker-photo" alt="" data-slt-value="photo" onerror="this.style.visibility='hidden'">
+          <div>
+            <h2 class="slt-speaker-name" data-slt-value="name"></h2>
+            <div class="slt-speaker-title" data-slt-value="title"></div>
+            <div class="slt-speaker-company" data-slt-value="company"></div>
+          </div>
+        </div>
+        <div class="slt-speaker-bio" data-slt-value="bio"></div>
+        <h3 class="speaker-sessions-title">Sessions by this speaker</h3>
+        <div data-slt-for-each="sessions">
+          <div class="speaker-session-item" data-slt-click="selectSession">
+            <div class="speaker-session-title" data-slt-value="title"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script src="https://release.slayte.com/latest/shared.js"></script>
+<script src="https://release.slayte.com/latest/slayte-elements.js"
+  data-slt-sitetoken="ZXlKaGJHY2lPaUpTVXpJMU5pSXNJblI1Y0NJNklrcFhWQ0o5LmV5SnphWFJsVlhWcFpDSTZJak0zTnpjek5EY3lMVEl6WldVdE5EUXpZeTFpT1RrNUxUVTJOakpoWTJZMk1EUTVNeUlzSW1SdmJXRnBiaUk2SW5Oc1lYbDBaUzV1YjNacGMzUmhaMmx1Wnk1amIyMGlMQ0pwWVhRaU9qRTNPRFUzTnpVek9UUXNJbVY0Y0NJNk1qRXdNVE0xTVRNNU5IMC5Rd3JFVHpwQUFaVzlXb21Qa2ZGUUd2eUhGSkYxQzg4NTBaZzBYc0p6WUJGOFBwdTROYjNBRjY4MlByY0tITHh4WnBVTmdCMExMSWctdFZ2RXJTQkRRcUxXbUpRXzF3SGc3SlozMjEwUUZfVm9vSl94Y1JaQ2RfWGtVNlNrdWtOZlY2RTMwRDhNSExwX0hSM1pPVTZ2ZWIweVRLMFNVc2RSdXFzMG8yNlAxbEpuTmozQUdDb1VkcjJqZUU2ZlBnd3lpMzFROGNQeThnNVhZYUt3NlFJNUlUUTlWT3B4a2Z3LUt6SnB1b01KMzB6MWljTkpxMHdGeldoYjM1Ymh3WEdlSWdLOGVvcklfX3FyaW5aT2JRMGRpZmhYaXR6bHlBM3BYM2xVTk9BVmN2bHBYbExNSVNraElweFFWVVJuNllXWHhsdkl6bHNPMUFxRjRMMFViQWJtcFE="></script>
+
+<script>
+(function () {
+  var PALETTE = ['#022F39', '#30B07F', '#5F9083', '#E45A3A', '#9A4D9D', '#478AC9', '#005953', '#0C49A3'];
+
+  function hashColor (text) {
+    var h = 0;
+    for (var i = 0; i < text.length; i++) {
+      h = (h * 31 + text.charCodeAt(i)) >>> 0;
+    }
+    return PALETTE[h % PALETTE.length];
+  }
+
+  // Color every category badge deterministically by its own text (stable across
+  // re-renders/filters since it's a pure function of the label, not render order).
+  function colorBadges (root) {
+    var badges = root.querySelectorAll('.amsn-slt-color');
+    for (var i = 0; i < badges.length; i++) {
+      var el = badges[i];
+      var text = el.textContent.trim();
+      if (text) {
+        el.style.backgroundColor = hashColor(text);
+      } else {
+        el.style.display = 'none';
+      }
+    }
+  }
+
+  // Category names come back as internal snake_case keys (e.g. "ce_available",
+  // "session_type") — humanize them for display. "ce" is spelled out in full
+  // since the abbreviation alone reads as a typo to anyone outside the org.
+  var LABEL_OVERRIDES = { ce_available: 'CE Available' };
+  function humanizeLabel (text) {
+    var key = text.trim().toLowerCase();
+    if (LABEL_OVERRIDES[key]) { return LABEL_OVERRIDES[key]; }
+    var words = text.split('_');
+    var result = [];
+    for (var i = 0; i < words.length; i++) {
+      var word = words[i];
+      if (word) {
+        result.push(word.charAt(0).toUpperCase() + word.slice(1).toLowerCase());
+      }
+    }
+    return result.join(' ');
+  }
+  function humanizeLabels (root) {
+    var labels = root.querySelectorAll('[data-slt-value="name"]:not([data-humanized])');
+    for (var i = 0; i < labels.length; i++) {
+      var el = labels[i];
+      if (el.textContent) {
+        el.textContent = humanizeLabel(el.textContent);
+      }
+      el.setAttribute('data-humanized', '1');
+    }
+  }
+
+  // The session/speaker detail modals render into a global root Slayte
+  // Elements appends to <body> on its own async init, separate from this
+  // widget's own DOM. Badges and category labels inside them need their
+  // own pass whenever a modal opens, rather than piggybacking on the
+  // accordion rebuild below.
+  var modalPassScheduled = false;
+  new MutationObserver(function () {
+    if (modalPassScheduled) { return; }
+    modalPassScheduled = true;
+    Promise.resolve().then(function () {
+      modalPassScheduled = false;
+      colorBadges(document.body);
+      humanizeLabels(document.body);
+    });
+  }).observe(document.body, { childList: true, subtree: true });
+
+  // ---- Day-by-day accordion, built on top of the flat session-list loop ----
+  var source = document.getElementById('amsn-slt-render-source');
+  var accordion = document.getElementById('amsn-slt-accordion');
+  if (!source || !accordion) { return; }
+
+  var rebuildScheduled = false;
+  var observer = new MutationObserver(scheduleRebuild);
+
+  function scheduleRebuild () {
+    if (rebuildScheduled) { return; }
+    rebuildScheduled = true;
+    Promise.resolve().then(function () {
+      rebuildScheduled = false;
+      // Disconnect before moving rows out of the observed node — otherwise the
+      // move itself re-triggers this callback and wipes what was just built.
+      observer.disconnect();
+      rebuildDays();
+      observer.observe(source, { childList: true });
+    });
+  }
+
+  function rebuildDays () {
+    var rows = Array.prototype.slice.call(source.children).filter(function (el) {
+      if (el.hasAttribute('data-slt-for-each')) { return false; }
+      return el.style.display !== 'none';
+    });
+
+    var order = [];
+    var groups = {};
+    rows.forEach(function (row) {
+      var dateEl = row.querySelector('.amsn-slt__row-date');
+      var label = 'Date TBD';
+      if (dateEl) {
+        var trimmed = dateEl.textContent.trim();
+        if (trimmed) { label = trimmed; }
+      }
+      if (!groups[label]) {
+        groups[label] = [];
+        order.push(label);
+      }
+      groups[label].push(row);
+    });
+
+    var openLabel = null;
+    var currentlyOpen = accordion.querySelector('.amsn-slt__day.is-open');
+    if (currentlyOpen) { openLabel = currentlyOpen.getAttribute('data-day-label'); }
+
+    accordion.innerHTML = '';
+
+    order.forEach(function (label, idx) {
+      var day = document.createElement('div');
+      day.className = 'amsn-slt__day';
+      day.setAttribute('data-day-label', label);
+      var shouldOpen = openLabel === label;
+      if (!shouldOpen) {
+        if (!openLabel) {
+          shouldOpen = idx === 0;
+        }
+      }
+      if (shouldOpen) {
+        day.classList.add('is-open');
+      }
+
+      var toggle = document.createElement('div');
+      toggle.className = 'amsn-slt__day-toggle';
+      toggle.innerHTML = '<h3>' + label + '</h3><span class="amsn-slt__icon">'
+        + (day.classList.contains('is-open') ? '&minus;' : '+') + '</span>';
+      toggle.addEventListener('click', function () {
+        var wasOpen = day.classList.contains('is-open');
+        Array.prototype.forEach.call(accordion.querySelectorAll('.amsn-slt__day.is-open'), function (d) {
+          d.classList.remove('is-open');
+          d.querySelector('.amsn-slt__icon').textContent = '+';
+        });
+        if (!wasOpen) {
+          day.classList.add('is-open');
+          toggle.querySelector('.amsn-slt__icon').innerHTML = '&minus;';
+        }
+      });
+
+      var body = document.createElement('div');
+      body.className = 'amsn-slt__day-body';
+      groups[label].forEach(function (row) {
+        row.style.display = '';
+        body.appendChild(row);
+      });
+
+      day.appendChild(toggle);
+      day.appendChild(body);
+      accordion.appendChild(day);
+    });
+
+    colorBadges(accordion);
+  }
+
+  observer.observe(source, { childList: true });
+  scheduleRebuild();
+
+  // Filters re-render the flat source in place; watch the widget's own
+  // no-results/empty indicators too so a filter-to-zero clears the accordion
+  // (the render source itself won't fire a mutation in that case).
+  var noResults = document.querySelector('.amsn-slt .slt-no-results');
+  var emptyState = document.querySelector('.amsn-slt [data-slt-empty]');
+  [noResults, emptyState].forEach(function (el) {
+    if (!el) { return; }
+    new MutationObserver(function () {
+      if (el.style.display === 'none') { return; }
+      if (el.offsetParent === null) { return; }
+      accordion.innerHTML = '';
+    }).observe(el, { attributes: true, attributeFilter: ['style'] });
+  });
+})();
+</script>
